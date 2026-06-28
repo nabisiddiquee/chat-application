@@ -68,20 +68,6 @@ public class MessageService {
     }
 
     private void publishMessage(Long senderId, Long receiverId, MessageResponse response) {
-
-        // Temporary debug logs.
-        // These logs help verify that WebSocket publishing is triggered after sending a message.
-        // Remove these System.out.println lines before final production commit if you want clean code.
-        System.out.println("======================================");
-        System.out.println("WebSocket message publishing started");
-        System.out.println("Sender topic: /topic/messages/" + senderId);
-        System.out.println("Receiver topic: /topic/messages/" + receiverId);
-        System.out.println("Sender chat topic: /topic/chats/" + senderId);
-        System.out.println("Receiver chat topic: /topic/chats/" + receiverId);
-        System.out.println("Message id: " + response.getId());
-        System.out.println("Message content: " + response.getContent());
-        System.out.println("======================================");
-
         // Publish message to sender's message topic.
         // Sender frontend can subscribe to this topic to update current chat instantly.
         messagingTemplate.convertAndSend("/topic/messages/" + senderId, response);
