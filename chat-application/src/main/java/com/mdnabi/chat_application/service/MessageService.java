@@ -8,6 +8,7 @@ import com.mdnabi.chat_application.enums.MessageType;
 import com.mdnabi.chat_application.repository.MessageRepository;
 import com.mdnabi.chat_application.repository.UserRepository;
 import lombok.RequiredArgsConstructor;
+import org.springframework.messaging.simp.SimpMessagingTemplate;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
@@ -19,6 +20,7 @@ public class MessageService {
 
     private final MessageRepository messageRepository;
     private final UserRepository userRepository;
+    private final SimpMessagingTemplate messagingTemplate;
 
     public MessageResponse sendMessage(String currentEmail, SendMessageRequest request) {
         User sender = userRepository.findByEmail(currentEmail)
@@ -40,8 +42,13 @@ public class MessageService {
                 .build();
 
         Message savedMessage = messageRepository.save(message);
+        MessageResponse response = mapToResponse(savedMessage);
 
-        return mapToResponse(savedMessage);
+        // After saving the message in DB, publish it through WebSocket topics.
+        // This allows sender and receiver clients to receive the message in real time.
+        publishMessage(sender.getId(), receiver.getId(), response);
+
+        return response;
     }
 
     public List<MessageResponse> getConversation(String currentEmail, Long receiverId) {
@@ -58,6 +65,38 @@ public class MessageService {
     public String markMessagesAsRead(String currentEmail, Long senderId) {
         int updatedCount = messageRepository.markMessagesAsRead(senderId, currentEmail);
         return updatedCount + " messages marked as read";
+    }
+
+    private void publishMessage(Long senderId, Long receiverId, MessageResponse response) {
+
+        // Temporary debug logs.
+        // These logs help verify that WebSocket publishing is triggered after sending a message.
+        // Remove these System.out.println lines before final production commit if you want clean code.
+        System.out.println("======================================");
+        System.out.println("WebSocket message publishing started");
+        System.out.println("Sender topic: /topic/messages/" + senderId);
+        System.out.println("Receiver topic: /topic/messages/" + receiverId);
+        System.out.println("Sender chat topic: /topic/chats/" + senderId);
+        System.out.println("Receiver chat topic: /topic/chats/" + receiverId);
+        System.out.println("Message id: " + response.getId());
+        System.out.println("Message content: " + response.getContent());
+        System.out.println("======================================");
+
+        // Publish message to sender's message topic.
+        // Sender frontend can subscribe to this topic to update current chat instantly.
+        messagingTemplate.convertAndSend("/topic/messages/" + senderId, response);
+
+        // Publish message to receiver's message topic.
+        // Receiver frontend can subscribe to this topic to receive new messages live.
+        messagingTemplate.convertAndSend("/topic/messages/" + receiverId, response);
+
+        // Publish chat-list update event to sender.
+        // This helps refresh last message preview in sender's sidebar.
+        messagingTemplate.convertAndSend("/topic/chats/" + senderId, response);
+
+        // Publish chat-list update event to receiver.
+        // This helps refresh last message preview and unread count in receiver's sidebar.
+        messagingTemplate.convertAndSend("/topic/chats/" + receiverId, response);
     }
 
     private MessageResponse mapToResponse(Message message) {
