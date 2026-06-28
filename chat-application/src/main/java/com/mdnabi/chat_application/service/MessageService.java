@@ -43,11 +43,6 @@ public class MessageService {
 
         Message savedMessage = messageRepository.save(message);
         MessageResponse response = mapToResponse(savedMessage);
-
-        // After saving the message in DB, publish it through WebSocket topics.
-        // This allows sender and receiver clients to receive the message in real time.
-        publishMessage(sender.getId(), receiver.getId(), response);
-
         return response;
     }
 
@@ -66,25 +61,6 @@ public class MessageService {
         int updatedCount = messageRepository.markMessagesAsRead(senderId, currentEmail);
         return updatedCount + " messages marked as read";
     }
-
-    private void publishMessage(Long senderId, Long receiverId, MessageResponse response) {
-        // Publish message to sender's message topic.
-        // Sender frontend can subscribe to this topic to update current chat instantly.
-        messagingTemplate.convertAndSend("/topic/messages/" + senderId, response);
-
-        // Publish message to receiver's message topic.
-        // Receiver frontend can subscribe to this topic to receive new messages live.
-        messagingTemplate.convertAndSend("/topic/messages/" + receiverId, response);
-
-        // Publish chat-list update event to sender.
-        // This helps refresh last message preview in sender's sidebar.
-        messagingTemplate.convertAndSend("/topic/chats/" + senderId, response);
-
-        // Publish chat-list update event to receiver.
-        // This helps refresh last message preview and unread count in receiver's sidebar.
-        messagingTemplate.convertAndSend("/topic/chats/" + receiverId, response);
-    }
-
     private MessageResponse mapToResponse(Message message) {
         return MessageResponse.builder()
                 .id(message.getId())
