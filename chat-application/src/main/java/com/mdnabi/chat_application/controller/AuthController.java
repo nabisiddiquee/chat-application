@@ -27,4 +27,9 @@ public class AuthController {
     public ResponseEntity<AuthResponse> login(@Valid @RequestBody LoginRequest request) {
         return ResponseEntity.ok(authService.login(request));
     }
+
+    @GetMapping("/protected")
+    public ResponseEntity<String> protectedApi() {
+        return ResponseEntity.ok("JWT protected API is working");
+    }
 }
