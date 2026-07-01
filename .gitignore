@@ -1,0 +1,15 @@
+
+# Mac
+.DS_Store
+
+# IntelliJ
+.idea/
+*.iml
+cat >> .gitignore <<'EOF'
+
+# Mac
+.DS_Store
+
+# IntelliJ
+.idea/
+*.iml
