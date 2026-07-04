@@ -1,0 +1,203 @@
+<div class="dashboard-page">
+  <aside class="sidebar">
+    <div class="sidebar-header">
+      <div class="app-logo">
+        <div class="logo-bubble">
+          <span></span>
+          <span></span>
+          <span></span>
+        </div>
+      </div>
+
+      <div>
+        <h1>ChatConnect</h1>
+        <p>Real-time messaging</p>
+      </div>
+    </div>
+
+    <div class="profile-card">
+      <div class="profile-avatar">
+        {{ auth.getUserInitials() }}
+        <span class="online-dot"></span>
+      </div>
+
+      <div class="profile-info">
+        <h2>{{ auth.getUserName() }}</h2>
+        <p>{{ auth.getUserEmail() }}</p>
+      </div>
+
+      <button class="logout-btn" type="button" (click)="logout()" title="Logout">
+        ⏻
+      </button>
+    </div>
+
+    <div class="search-box">
+      <span>🔍</span>
+      <input
+        type="text"
+        placeholder="Search chats or groups..."
+        [value]="searchText"
+        (input)="onSearch($event)"
+      />
+    </div>
+
+    <div class="tabs">
+      <button
+        type="button"
+        [class.active]="activeTab === 'chats'"
+        (click)="selectTab('chats')"
+      >
+        Chats
+      </button>
+
+      <button
+        type="button"
+        [class.active]="activeTab === 'groups'"
+        (click)="selectTab('groups')"
+      >
+        Groups
+      </button>
+    </div>
+
+    <div class="chat-list">
+      <button
+        type="button"
+        class="chat-item"
+        *ngFor="let chat of currentList"
+        [class.selected]="selectedChat?.id === chat.id"
+        (click)="selectChat(chat)"
+      >
+        <div class="chat-avatar">
+          {{ chat.initials }}
+          <span
+            class="chat-status"
+            [class.online]="chat.online"
+            [class.offline]="!chat.online"
+          ></span>
+        </div>
+
+        <div class="chat-content">
+          <div class="chat-top">
+            <h3>{{ chat.name }}</h3>
+            <span>{{ chat.time }}</span>
+          </div>
+
+          <div class="chat-bottom">
+            <p>{{ chat.message }}</p>
+
+            <strong *ngIf="chat.unread > 0">
+              {{ chat.unread }}
+            </strong>
+          </div>
+        </div>
+      </button>
+
+      <div class="empty-list" *ngIf="currentList.length === 0">
+        <div>🔎</div>
+        <p>No result found</p>
+      </div>
+    </div>
+  </aside>
+
+  <main class="chat-panel">
+    <header class="chat-header" *ngIf="selectedChat">
+      <div class="selected-profile">
+        <div class="chat-avatar large">
+          {{ selectedChat.initials }}
+          <span
+            class="chat-status"
+            [class.online]="selectedChat.online"
+            [class.offline]="!selectedChat.online"
+          ></span>
+        </div>
+
+        <div>
+          <h2>{{ selectedChat.name }}</h2>
+
+          <p
+            class="status-text"
+            [class.online-text]="selectedChat.online"
+            [class.offline-text]="!selectedChat.online"
+          >
+            {{ selectedChat.online ? 'Online now' : 'Offline' }}
+          </p>
+        </div>
+      </div>
+
+      <div class="header-actions">
+        <button type="button">📞</button>
+        <button type="button">🎥</button>
+        <button type="button">⋮</button>
+      </div>
+    </header>
+
+    <section class="welcome-state" *ngIf="!selectedChat">
+      <div class="welcome-illustration">
+        <div class="message-card card-one">
+          <span>💬</span>
+          <p>Real-time chat</p>
+        </div>
+
+        <div class="message-card card-two">
+          <span>👥</span>
+          <p>Group messaging</p>
+        </div>
+
+        <div class="message-card card-three">
+          <span>⚡</span>
+          <p>Instant updates</p>
+        </div>
+
+        <div class="center-bubble">
+          <div class="typing-bubble">
+            <span></span>
+            <span></span>
+            <span></span>
+          </div>
+        </div>
+      </div>
+
+      <h2>Welcome to ChatConnect</h2>
+
+      <p>
+        Select a conversation from the sidebar to start messaging.
+      </p>
+    </section>
+
+    <section class="chat-window" *ngIf="selectedChat">
+      <div class="date-chip">Today</div>
+
+      <div class="message-row received">
+        <div class="message-bubble">
+          <p>Hello {{ auth.getUserName() }}, welcome to ChatConnect!</p>
+          <span>10:42 AM</span>
+        </div>
+      </div>
+
+      <div class="message-row sent">
+        <div class="message-bubble">
+          <p>Thanks! Dashboard shell looks great 🚀</p>
+          <span>10:43 AM</span>
+        </div>
+      </div>
+
+      <div class="typing-indicator" *ngIf="selectedChat.online">
+        <span></span>
+        <span></span>
+        <span></span>
+        {{ selectedChat.name }} is typing...
+      </div>
+    </section>
+
+    <footer class="message-input" *ngIf="selectedChat">
+      <button type="button">😊</button>
+      <button type="button">📎</button>
+
+      <input type="text" placeholder="Type your message..." />
+
+      <button type="button" class="send-btn">
+        ➤
+      </button>
+    </footer>
+  </main>
+</div>

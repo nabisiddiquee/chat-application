@@ -1,4 +1,5 @@
-import { Injectable } from '@angular/core';
+import { Inject, Injectable, PLATFORM_ID } from '@angular/core';
+import { isPlatformBrowser } from '@angular/common';
 import { HttpClient } from '@angular/common/http';
 import { Observable } from 'rxjs';
 
@@ -27,8 +28,14 @@ export interface AuthResponse {
 })
 export class Auth {
   private readonly apiUrl = 'http://localhost:8082/api/auth';
+  private readonly isBrowser: boolean;
 
-  constructor(private http: HttpClient) {}
+  constructor(
+    private http: HttpClient,
+    @Inject(PLATFORM_ID) private platformId: Object
+  ) {
+    this.isBrowser = isPlatformBrowser(this.platformId);
+  }
 
   register(request: RegisterRequest): Observable<AuthResponse> {
     return this.http.post<AuthResponse>(`${this.apiUrl}/register`, request);
@@ -39,15 +46,71 @@ export class Auth {
   }
 
   saveAuthData(response: AuthResponse): void {
-    localStorage.setItem('chat_token', response.token);
-    localStorage.setItem('chat_user_id', String(response.userId));
-    localStorage.setItem('chat_user_name', response.name);
-    localStorage.setItem('chat_user_email', response.email);
-    localStorage.setItem('chat_user_role', response.role);
+    if (!this.isBrowser) {
+      return;
+    }
+
+    window.localStorage.setItem('chat_token', response.token);
+    window.localStorage.setItem('chat_user_id', String(response.userId));
+    window.localStorage.setItem('chat_user_name', response.name);
+    window.localStorage.setItem('chat_user_email', response.email);
+    window.localStorage.setItem('chat_user_role', response.role);
   }
 
   getToken(): string | null {
-    return localStorage.getItem('chat_token');
+    if (!this.isBrowser) {
+      return null;
+    }
+
+    return window.localStorage.getItem('chat_token');
+  }
+
+  getUserId(): string | null {
+    if (!this.isBrowser) {
+      return null;
+    }
+
+    return window.localStorage.getItem('chat_user_id');
+  }
+
+  getUserName(): string {
+    if (!this.isBrowser) {
+      return 'Chat User';
+    }
+
+    return window.localStorage.getItem('chat_user_name') || 'Chat User';
+  }
+
+  getUserEmail(): string {
+    if (!this.isBrowser) {
+      return '';
+    }
+
+    return window.localStorage.getItem('chat_user_email') || '';
+  }
+
+  getUserRole(): string {
+    if (!this.isBrowser) {
+      return 'USER';
+    }
+
+    return window.localStorage.getItem('chat_user_role') || 'USER';
+  }
+
+  getUserInitials(): string {
+    const name = this.getUserName().trim();
+
+    if (!name) {
+      return 'CU';
+    }
+
+    const parts = name.split(' ').filter(Boolean);
+
+    if (parts.length === 1) {
+      return parts[0].substring(0, 2).toUpperCase();
+    }
+
+    return `${parts[0][0]}${parts[1][0]}`.toUpperCase();
   }
 
   isLoggedIn(): boolean {
@@ -55,10 +118,14 @@ export class Auth {
   }
 
   logout(): void {
-    localStorage.removeItem('chat_token');
-    localStorage.removeItem('chat_user_id');
-    localStorage.removeItem('chat_user_name');
-    localStorage.removeItem('chat_user_email');
-    localStorage.removeItem('chat_user_role');
+    if (!this.isBrowser) {
+      return;
+    }
+
+    window.localStorage.removeItem('chat_token');
+    window.localStorage.removeItem('chat_user_id');
+    window.localStorage.removeItem('chat_user_name');
+    window.localStorage.removeItem('chat_user_email');
+    window.localStorage.removeItem('chat_user_role');
   }
 }
