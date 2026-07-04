@@ -1,0 +1,30 @@
+@import '../login/login.css';
+
+.register-brand {
+  background:
+    radial-gradient(circle at 18% 15%, rgba(134, 239, 172, 0.35), transparent 28%),
+    radial-gradient(circle at 88% 0%, rgba(255, 255, 255, 0.12), transparent 25%),
+    radial-gradient(circle at 0% 100%, rgba(96, 165, 250, 0.24), transparent 28%),
+    linear-gradient(135deg, #0f172a 0%, #2563eb 48%, #22c55e 100%);
+}
+
+.register-card {
+  max-width: 570px;
+  padding: 42px 50px;
+}
+
+.register-card .auth-header {
+  margin-bottom: 26px;
+}
+
+.register-card .form-group {
+  margin-bottom: 18px;
+}
+
+.register-card .input-box {
+  height: 56px;
+}
+
+.register-card .submit-btn {
+  height: 58px;
+}
