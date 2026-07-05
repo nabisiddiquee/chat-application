@@ -863,3 +863,55 @@
     border-radius: 20px;
   }
 }
+
+/* ================= REAL MESSAGES UI ================= */
+
+.empty-messages {
+  min-height: 260px;
+  display: grid;
+  place-items: center;
+  text-align: center;
+  color: #64748b;
+  font-size: 18px;
+  font-weight: 700;
+}
+
+.empty-messages div {
+  font-size: 46px;
+  margin-bottom: 10px;
+}
+
+.message-input textarea {
+  flex: 1;
+  min-height: 54px;
+  max-height: 120px;
+  resize: none;
+  border: none;
+  outline: none;
+  background: #f8fafc;
+  border-radius: 18px;
+  padding: 16px 18px;
+  font-size: 18px;
+  font-weight: 650;
+  color: #0f172a;
+  line-height: 1.35;
+}
+
+.message-input textarea::placeholder {
+  color: #94a3b8;
+}
+
+.message-input textarea:disabled {
+  opacity: 0.7;
+  cursor: not-allowed;
+}
+
+.send-btn:disabled {
+  opacity: 0.55;
+  cursor: not-allowed;
+}
+
+.message-bubble p {
+  white-space: pre-wrap;
+  word-break: break-word;
+}

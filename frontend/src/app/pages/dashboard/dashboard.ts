@@ -1,5 +1,6 @@
 import { CommonModule } from '@angular/common';
-import { Component, OnDestroy, OnInit } from '@angular/core';
+import { Component, ElementRef, OnDestroy, OnInit, ViewChild } from '@angular/core';
+import { FormsModule } from '@angular/forms';
 import { Router } from '@angular/router';
 import { Subscription } from 'rxjs';
 import Swal from 'sweetalert2';
@@ -7,6 +8,7 @@ import Swal from 'sweetalert2';
 import { Auth } from '../../core/services/auth';
 import { ChatListItem, ChatService } from '../../core/services/chat';
 import { CurrentUser, UserService } from '../../core/services/user';
+import { MessageResponse, MessageService } from '../../core/services/message';
 import { UserStatusEvent, WebSocketService } from '../../core/services/websocket';
 
 interface ChatPreview {
@@ -24,13 +26,25 @@ interface ChatPreview {
   lastMessageSentByMe?: boolean;
 }
 
+interface ChatMessage {
+  id: number;
+  senderId: number;
+  receiverId: number;
+  content: string;
+  time: string;
+  sentByMe: boolean;
+  read?: boolean;
+}
+
 @Component({
   selector: 'app-dashboard',
-  imports: [CommonModule],
+  imports: [CommonModule, FormsModule],
   templateUrl: './dashboard.html',
   styleUrl: './dashboard.css'
 })
 export class Dashboard implements OnInit, OnDestroy {
+  @ViewChild('messageContainer') messageContainer?: ElementRef<HTMLDivElement>;
+
   activeTab: 'chats' | 'groups' = 'chats';
   selectedChat: ChatPreview | null = null;
   searchText = '';
@@ -38,6 +52,11 @@ export class Dashboard implements OnInit, OnDestroy {
   currentUser: CurrentUser | null = null;
   loadingUser = false;
   loadingChats = false;
+  loadingMessages = false;
+  sendingMessage = false;
+
+  newMessage = '';
+  messages: ChatMessage[] = [];
 
   private statusSubscription?: Subscription;
 
@@ -73,6 +92,7 @@ export class Dashboard implements OnInit, OnDestroy {
     public auth: Auth,
     private userService: UserService,
     private chatService: ChatService,
+    private messageService: MessageService,
     private webSocketService: WebSocketService,
     private router: Router
   ) {}
@@ -177,7 +197,6 @@ export class Dashboard implements OnInit, OnDestroy {
   private listenToStatusUpdates(): void {
     this.statusSubscription = this.webSocketService.statusUpdates$.subscribe({
       next: (event) => {
-        console.log('DASHBOARD STATUS EVENT:', event);
         this.applyStatusUpdate(event);
       }
     });
@@ -202,16 +221,13 @@ export class Dashboard implements OnInit, OnDestroy {
 
       matched = true;
 
-      const updatedMessage =
-        event.online && (!chat.lastMessageId || chat.message === 'No messages yet')
-          ? 'Online now'
-          : chat.message;
-
       return {
         ...chat,
         online: event.online,
         lastSeen: event.lastSeen || chat.lastSeen,
-        message: updatedMessage
+        message: event.online && (!chat.lastMessageId || chat.message === 'No messages yet')
+          ? 'Online now'
+          : chat.message
       };
     });
 
@@ -270,6 +286,171 @@ export class Dashboard implements OnInit, OnDestroy {
     }
 
     return item.lastMessage;
+  }
+
+  selectChat(chat: ChatPreview): void {
+    this.selectedChat = chat;
+    this.messages = [];
+    this.newMessage = '';
+
+    if (chat.type === 'user') {
+      this.loadConversation(chat.id);
+      this.markMessagesAsRead(chat.id);
+    }
+  }
+
+  loadConversation(receiverId: number): void {
+    this.loadingMessages = true;
+
+    this.messageService.getConversation(receiverId).subscribe({
+      next: (messages) => {
+        this.messages = messages.map((message) => this.mapMessage(message));
+        this.loadingMessages = false;
+
+        this.scrollMessagesToBottom();
+      },
+      error: (error) => {
+        this.loadingMessages = false;
+
+        if (error.status === 401 || error.status === 403) {
+          this.handleSessionExpired();
+          return;
+        }
+
+        Swal.fire({
+          icon: 'error',
+          title: 'Messages Failed',
+          text: 'Unable to load conversation.'
+        });
+      }
+    });
+  }
+
+  sendMessage(): void {
+    const content = this.newMessage.trim();
+
+    if (!content || !this.selectedChat || this.selectedChat.type !== 'user') {
+      return;
+    }
+
+    this.sendingMessage = true;
+
+    this.messageService.sendMessage({
+      receiverId: this.selectedChat.id,
+      content
+    }).subscribe({
+      next: (message) => {
+        this.sendingMessage = false;
+        this.newMessage = '';
+
+        this.messages.push(this.mapMessage(message));
+
+        this.updateChatPreviewAfterSend(this.selectedChat!.id, content);
+
+        this.scrollMessagesToBottom();
+
+        setTimeout(() => {
+          this.loadChatList();
+        }, 400);
+      },
+      error: (error) => {
+        this.sendingMessage = false;
+
+        if (error.status === 401 || error.status === 403) {
+          this.handleSessionExpired();
+          return;
+        }
+
+        Swal.fire({
+          icon: 'error',
+          title: 'Message Failed',
+          text: 'Unable to send message.'
+        });
+      }
+    });
+  }
+
+  onMessageEnter(event: Event): void {
+    const keyboardEvent = event as KeyboardEvent;
+
+    if (!keyboardEvent.shiftKey) {
+      keyboardEvent.preventDefault();
+      this.sendMessage();
+    }
+  }
+
+  private markMessagesAsRead(senderId: number): void {
+    this.messageService.markMessagesAsRead(senderId).subscribe({
+      next: () => {
+        this.chats = this.chats.map((chat) => {
+          if (chat.id !== senderId) {
+            return chat;
+          }
+
+          return {
+            ...chat,
+            unread: 0
+          };
+        });
+      },
+      error: () => {}
+    });
+  }
+
+  private mapMessage(message: MessageResponse): ChatMessage {
+    const currentUserId = Number(this.currentUser?.id || this.auth.getUserId());
+
+    const createdTime =
+      message.sentAt ||
+      message.createdAt ||
+      '';
+
+    return {
+      id: message.id,
+      senderId: message.senderId,
+      receiverId: message.receiverId,
+      content: message.content,
+      time: this.formatMessageTime(createdTime),
+      sentByMe: message.senderId === currentUserId,
+      read: message.read
+    };
+  }
+
+  private updateChatPreviewAfterSend(receiverId: number, content: string): void {
+    this.chats = this.chats.map((chat) => {
+      if (chat.id !== receiverId) {
+        return chat;
+      }
+
+      return {
+        ...chat,
+        message: `You: ${content}`,
+        time: 'Now',
+        unread: 0,
+        lastMessageSentByMe: true
+      };
+    });
+
+    if (this.selectedChat?.id === receiverId) {
+      this.selectedChat = {
+        ...this.selectedChat,
+        message: `You: ${content}`,
+        time: 'Now',
+        unread: 0,
+        lastMessageSentByMe: true
+      };
+    }
+  }
+
+  private scrollMessagesToBottom(): void {
+    setTimeout(() => {
+      if (!this.messageContainer?.nativeElement) {
+        return;
+      }
+
+      const element = this.messageContainer.nativeElement;
+      element.scrollTop = element.scrollHeight;
+    }, 100);
   }
 
   private formatMessageTime(value: string | null): string {
@@ -349,14 +530,12 @@ export class Dashboard implements OnInit, OnDestroy {
     this.activeTab = tab;
     this.selectedChat = null;
     this.searchText = '';
+    this.messages = [];
+    this.newMessage = '';
 
     if (tab === 'chats') {
       this.loadChatList();
     }
-  }
-
-  selectChat(chat: ChatPreview): void {
-    this.selectedChat = chat;
   }
 
   onSearch(event: Event): void {

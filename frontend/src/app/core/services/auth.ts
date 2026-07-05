@@ -15,12 +15,16 @@ export interface LoginRequest {
 }
 
 export interface AuthResponse {
-  message: string;
-  token: string;
-  userId: number;
-  name: string;
-  email: string;
-  role: string;
+  message?: string;
+  token?: string;
+  accessToken?: string;
+  jwt?: string;
+  jwtToken?: string;
+  userId?: number;
+  id?: number;
+  name?: string;
+  email?: string;
+  role?: string;
 }
 
 @Injectable({
@@ -45,16 +49,30 @@ export class Auth {
     return this.http.post<AuthResponse>(`${this.apiUrl}/login`, request);
   }
 
-  saveAuthData(response: AuthResponse): void {
+  saveAuthData(response: AuthResponse): boolean {
     if (!this.isBrowser) {
-      return;
+      return false;
     }
 
-    window.localStorage.setItem('chat_token', response.token);
-    window.localStorage.setItem('chat_user_id', String(response.userId));
-    window.localStorage.setItem('chat_user_name', response.name);
-    window.localStorage.setItem('chat_user_email', response.email);
-    window.localStorage.setItem('chat_user_role', response.role);
+    const token =
+      response.token ||
+      response.accessToken ||
+      response.jwt ||
+      response.jwtToken ||
+      '';
+
+    if (!token || token.trim().length === 0) {
+      console.error('Token missing from login response:', response);
+      return false;
+    }
+
+    window.localStorage.setItem('chat_token', token);
+    window.localStorage.setItem('chat_user_id', String(response.userId || response.id || ''));
+    window.localStorage.setItem('chat_user_name', response.name || 'Chat User');
+    window.localStorage.setItem('chat_user_email', response.email || '');
+    window.localStorage.setItem('chat_user_role', response.role || 'USER');
+
+    return true;
   }
 
   getToken(): string | null {
@@ -97,24 +115,9 @@ export class Auth {
     return window.localStorage.getItem('chat_user_role') || 'USER';
   }
 
-  getUserInitials(): string {
-    const name = this.getUserName().trim();
-
-    if (!name) {
-      return 'CU';
-    }
-
-    const parts = name.split(' ').filter(Boolean);
-
-    if (parts.length === 1) {
-      return parts[0].substring(0, 2).toUpperCase();
-    }
-
-    return `${parts[0][0]}${parts[1][0]}`.toUpperCase();
-  }
-
   isLoggedIn(): boolean {
-    return !!this.getToken();
+    const token = this.getToken();
+    return !!token && token.trim().length > 0;
   }
 
   logout(): void {
@@ -122,10 +125,6 @@ export class Auth {
       return;
     }
 
-    window.localStorage.removeItem('chat_token');
-    window.localStorage.removeItem('chat_user_id');
-    window.localStorage.removeItem('chat_user_name');
-    window.localStorage.removeItem('chat_user_email');
-    window.localStorage.removeItem('chat_user_role');
+    window.localStorage.clear();
   }
 }

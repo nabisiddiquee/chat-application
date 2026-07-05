@@ -1078,3 +1078,47 @@
     transition: none !important;
   }
 }
+
+
+/* ================= LOGIN BUTTON CLICK FIX ================= */
+
+.auth-page,
+.form-panel,
+.auth-card,
+.auth-form,
+.primary-btn,
+.login-click-btn {
+  pointer-events: auto !important;
+}
+
+.auth-card {
+  position: relative;
+  z-index: 20;
+}
+
+.auth-form {
+  position: relative;
+  z-index: 30;
+}
+
+.primary-btn,
+.login-click-btn {
+  position: relative;
+  z-index: 9999;
+  cursor: pointer !important;
+  user-select: none;
+}
+
+.primary-btn:disabled,
+.login-click-btn:disabled {
+  cursor: not-allowed !important;
+  opacity: 0.75;
+}
+
+.floating-emoji,
+.brand-panel::before,
+.brand-panel::after,
+.form-panel::before,
+.form-panel::after {
+  pointer-events: none !important;
+}

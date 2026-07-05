@@ -17,13 +17,13 @@
 
     <div class="profile-card">
       <div class="profile-avatar">
-        {{ auth.getUserInitials() }}
+        {{ displayInitials }}
         <span class="online-dot"></span>
       </div>
 
       <div class="profile-info">
-        <h2>{{ auth.getUserName() }}</h2>
-        <p>{{ auth.getUserEmail() }}</p>
+        <h2>{{ loadingUser ? 'Loading...' : displayName }}</h2>
+        <p>{{ displayEmail }}</p>
       </div>
 
       <button class="logout-btn" type="button" (click)="logout()" title="Logout">
@@ -60,11 +60,16 @@
     </div>
 
     <div class="chat-list">
+      <div class="empty-list" *ngIf="activeTab === 'chats' && loadingChats">
+        <div>⏳</div>
+        <p>Loading chats...</p>
+      </div>
+
       <button
         type="button"
         class="chat-item"
         *ngFor="let chat of currentList"
-        [class.selected]="selectedChat?.id === chat.id"
+        [class.selected]="selectedChat?.id === chat.id && selectedChat?.type === chat.type"
         (click)="selectChat(chat)"
       >
         <div class="chat-avatar">
@@ -92,9 +97,11 @@
         </div>
       </button>
 
-      <div class="empty-list" *ngIf="currentList.length === 0">
+      <div class="empty-list" *ngIf="!loadingChats && currentList.length === 0">
         <div>🔎</div>
-        <p>No result found</p>
+        <p>
+          {{ activeTab === 'chats' ? 'No chats found' : 'No groups found' }}
+        </p>
       </div>
     </div>
   </aside>
@@ -164,38 +171,50 @@
       </p>
     </section>
 
-    <section class="chat-window" *ngIf="selectedChat">
+    <section class="chat-window" *ngIf="selectedChat" #messageContainer>
       <div class="date-chip">Today</div>
 
-      <div class="message-row received">
-        <div class="message-bubble">
-          <p>Hello {{ auth.getUserName() }}, welcome to ChatConnect!</p>
-          <span>10:42 AM</span>
-        </div>
+      <div class="empty-messages" *ngIf="loadingMessages">
+        <div>⏳</div>
+        <p>Loading messages...</p>
       </div>
 
-      <div class="message-row sent">
-        <div class="message-bubble">
-          <p>Thanks! Dashboard shell looks great 🚀</p>
-          <span>10:43 AM</span>
-        </div>
+      <div class="empty-messages" *ngIf="!loadingMessages && messages.length === 0">
+        <div>👋</div>
+        <p>No messages yet. Start the conversation.</p>
       </div>
 
-      <div class="typing-indicator" *ngIf="selectedChat.online">
-        <span></span>
-        <span></span>
-        <span></span>
-        {{ selectedChat.name }} is typing...
+      <div
+        class="message-row"
+        *ngFor="let message of messages"
+        [class.sent]="message.sentByMe"
+        [class.received]="!message.sentByMe"
+      >
+        <div class="message-bubble">
+          <p>{{ message.content }}</p>
+          <span>{{ message.time }}</span>
+        </div>
       </div>
     </section>
 
-    <footer class="message-input" *ngIf="selectedChat">
+    <footer class="message-input" *ngIf="selectedChat && selectedChat.type === 'user'">
       <button type="button">😊</button>
       <button type="button">📎</button>
 
-      <input type="text" placeholder="Type your message..." />
+      <textarea
+        rows="1"
+        placeholder="Type your message..."
+        [(ngModel)]="newMessage"
+        (keydown.enter)="onMessageEnter($event)"
+        [disabled]="sendingMessage"
+      ></textarea>
 
-      <button type="button" class="send-btn">
+      <button
+        type="button"
+        class="send-btn"
+        [disabled]="sendingMessage || !newMessage.trim()"
+        (click)="sendMessage()"
+      >
         ➤
       </button>
     </footer>
