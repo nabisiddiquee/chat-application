@@ -39,6 +39,11 @@ interface ChatMessage {
   time: string;
   sentByMe: boolean;
   read?: boolean;
+  messageType?: 'TEXT' | 'FILE';
+  fileOriginalName?: string;
+  fileStoredName?: string;
+  fileContentType?: string;
+  fileSize?: number;
 }
 
 @Component({
@@ -62,6 +67,16 @@ export class Dashboard implements OnInit, OnDestroy {
 
   newMessage = '';
   messages: ChatMessage[] = [];
+
+  showEmojiPicker = false;
+  selectedFile: File | null = null;
+
+  emojis: string[] = [
+    '😀', '😁', '😂', '🤣', '😊', '😍', '😘', '😎',
+    '😢', '😭', '😡', '👍', '👎', '🙏', '👏', '🔥',
+    '❤️', '💙', '✅', '❌', '🎉', '🚀', '💯', '⭐',
+    '😇', '🤝', '🙌', '💪', '👀', '😅', '😋', '🤩'
+  ];
 
   private statusSubscription?: Subscription;
   private messageSubscription?: Subscription;
@@ -303,6 +318,11 @@ export class Dashboard implements OnInit, OnDestroy {
     const currentUserId = Number(this.currentUser?.id || this.auth.getUserId());
     const sentByMe = event.senderId === currentUserId;
 
+    const previewText =
+      event.messageType === 'FILE'
+        ? `📎 ${event.fileOriginalName || 'File'}`
+        : event.content;
+
     this.chats = this.chats.map((chat) => {
       if (chat.id !== otherUserId) {
         return chat;
@@ -310,7 +330,7 @@ export class Dashboard implements OnInit, OnDestroy {
 
       return {
         ...chat,
-        message: sentByMe ? `You: ${event.content}` : event.content,
+        message: sentByMe ? `You: ${previewText}` : previewText,
         time: this.formatMessageTime(event.sentAt || event.createdAt || ''),
         unread: sentByMe || isSelectedChatOpen ? 0 : chat.unread + 1,
         lastMessageId: event.id,
@@ -321,7 +341,7 @@ export class Dashboard implements OnInit, OnDestroy {
     if (this.selectedChat?.id === otherUserId && this.selectedChat.type === 'user') {
       this.selectedChat = {
         ...this.selectedChat,
-        message: sentByMe ? `You: ${event.content}` : event.content,
+        message: sentByMe ? `You: ${previewText}` : previewText,
         time: this.formatMessageTime(event.sentAt || event.createdAt || ''),
         unread: 0,
         lastMessageId: event.id,
@@ -420,6 +440,8 @@ export class Dashboard implements OnInit, OnDestroy {
     this.selectedChat = chat;
     this.messages = [];
     this.newMessage = '';
+    this.selectedFile = null;
+    this.showEmojiPicker = false;
 
     if (chat.type === 'user') {
       this.loadConversation(chat.id);
@@ -457,19 +479,25 @@ export class Dashboard implements OnInit, OnDestroy {
   sendMessage(): void {
     const content = this.newMessage.trim();
 
-    if (!content || !this.selectedChat || this.selectedChat.type !== 'user') {
+    if ((!content && !this.selectedFile) || !this.selectedChat || this.selectedChat.type !== 'user') {
       return;
     }
 
     this.sendingMessage = true;
 
-    this.messageService.sendMessage({
-      receiverId: this.selectedChat.id,
-      content
-    }).subscribe({
+    const request$ = this.selectedFile
+      ? this.messageService.sendFileMessage(this.selectedChat.id, this.selectedFile, content)
+      : this.messageService.sendMessage({
+          receiverId: this.selectedChat.id,
+          content
+        });
+
+    request$.subscribe({
       next: (message) => {
         this.sendingMessage = false;
         this.newMessage = '';
+        this.selectedFile = null;
+        this.showEmojiPicker = false;
 
         const mappedMessage = this.mapMessage(message);
         const alreadyExists = this.messages.some((item) => item.id === mappedMessage.id);
@@ -478,7 +506,12 @@ export class Dashboard implements OnInit, OnDestroy {
           this.messages.push(mappedMessage);
         }
 
-        this.updateChatPreviewAfterSend(this.selectedChat!.id, content);
+        const previewText =
+          mappedMessage.messageType === 'FILE'
+            ? `📎 ${mappedMessage.fileOriginalName || 'File'}`
+            : content;
+
+        this.updateChatPreviewAfterSend(this.selectedChat!.id, previewText);
 
         this.scrollMessagesToBottom();
 
@@ -510,6 +543,34 @@ export class Dashboard implements OnInit, OnDestroy {
       keyboardEvent.preventDefault();
       this.sendMessage();
     }
+  }
+
+  toggleEmojiPicker(): void {
+    this.showEmojiPicker = !this.showEmojiPicker;
+  }
+
+  addEmoji(emoji: string): void {
+    this.newMessage = `${this.newMessage}${emoji}`;
+    this.showEmojiPicker = false;
+  }
+
+  triggerFileInput(fileInput: HTMLInputElement): void {
+    fileInput.click();
+  }
+
+  onFileSelected(event: Event): void {
+    const input = event.target as HTMLInputElement;
+
+    if (!input.files || input.files.length === 0) {
+      return;
+    }
+
+    this.selectedFile = input.files[0];
+    input.value = '';
+  }
+
+  clearSelectedFile(): void {
+    this.selectedFile = null;
   }
 
   private markMessagesAsRead(senderId: number): void {
@@ -545,7 +606,12 @@ export class Dashboard implements OnInit, OnDestroy {
       content: message.content,
       time: this.formatMessageTime(createdTime),
       sentByMe: message.senderId === currentUserId,
-      read: message.read
+      read: message.read || message.readStatus,
+      messageType: message.messageType || 'TEXT',
+      fileOriginalName: message.fileOriginalName,
+      fileStoredName: message.fileStoredName,
+      fileContentType: message.fileContentType,
+      fileSize: message.fileSize
     };
   }
 
@@ -564,7 +630,12 @@ export class Dashboard implements OnInit, OnDestroy {
       content: message.content,
       time: this.formatMessageTime(createdTime),
       sentByMe: message.senderId === currentUserId,
-      read: message.read
+      read: message.read || message.readStatus,
+      messageType: message.messageType || 'TEXT',
+      fileOriginalName: message.fileOriginalName,
+      fileStoredName: message.fileStoredName,
+      fileContentType: message.fileContentType,
+      fileSize: message.fileSize
     };
   }
 
@@ -592,6 +663,72 @@ export class Dashboard implements OnInit, OnDestroy {
         lastMessageSentByMe: true
       };
     }
+  }
+
+  viewFile(message: ChatMessage): void {
+    if (!message.fileStoredName) {
+      return;
+    }
+
+    this.messageService.viewFile(message.fileStoredName).subscribe({
+      next: (blob) => {
+        const fileUrl = URL.createObjectURL(blob);
+        window.open(fileUrl, '_blank');
+
+        setTimeout(() => {
+          URL.revokeObjectURL(fileUrl);
+        }, 5000);
+      },
+      error: () => {
+        Swal.fire({
+          icon: 'error',
+          title: 'File View Failed',
+          text: 'Unable to open file.'
+        });
+      }
+    });
+  }
+
+  downloadFile(message: ChatMessage): void {
+    if (!message.fileStoredName) {
+      return;
+    }
+
+    this.messageService.downloadFile(message.fileStoredName).subscribe({
+      next: (blob) => {
+        const fileUrl = URL.createObjectURL(blob);
+        const anchor = document.createElement('a');
+
+        anchor.href = fileUrl;
+        anchor.download = message.fileOriginalName || 'download';
+        anchor.click();
+
+        URL.revokeObjectURL(fileUrl);
+      },
+      error: () => {
+        Swal.fire({
+          icon: 'error',
+          title: 'Download Failed',
+          text: 'Unable to download file.'
+        });
+      }
+    });
+  }
+
+  formatFileSize(size?: number): string {
+    if (!size) {
+      return '';
+    }
+
+    if (size < 1024) {
+      return `${size} B`;
+    }
+
+    if (size < 1024 * 1024) {
+      return `${(size / 1024).toFixed(1)} KB`;
+    }
+
+    return `${(size / (1024 * 1024)).toFixed(1)} MB`;
   }
 
   private scrollMessagesToBottom(): void {
@@ -684,6 +821,8 @@ export class Dashboard implements OnInit, OnDestroy {
     this.searchText = '';
     this.messages = [];
     this.newMessage = '';
+    this.selectedFile = null;
+    this.showEmojiPicker = false;
 
     if (tab === 'chats') {
       this.loadChatList();

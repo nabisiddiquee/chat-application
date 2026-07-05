@@ -23,6 +23,13 @@ export interface RealtimeMessageEvent {
   sentAt?: string;
   createdAt?: string;
   read?: boolean;
+  readStatus?: boolean;
+
+  messageType?: 'TEXT' | 'FILE';
+  fileOriginalName?: string;
+  fileStoredName?: string;
+  fileContentType?: string;
+  fileSize?: number;
 }
 
 export interface RealtimeChatEvent {

@@ -191,28 +191,104 @@
         [class.received]="!message.sentByMe"
       >
         <div class="message-bubble">
-          <p>{{ message.content }}</p>
+          <ng-container *ngIf="message.messageType !== 'FILE'">
+            <p>{{ message.content }}</p>
+          </ng-container>
+
+          <ng-container *ngIf="message.messageType === 'FILE'">
+            <p *ngIf="message.content && message.content !== message.fileOriginalName">
+              {{ message.content }}
+            </p>
+
+            <div class="file-message-card">
+              <div class="file-icon">📎</div>
+
+              <div class="file-info">
+                <h4>{{ message.fileOriginalName || 'File' }}</h4>
+                <p>{{ formatFileSize(message.fileSize) }}</p>
+              </div>
+
+              <div class="file-actions">
+                <button type="button" (click)="viewFile(message)">
+                  View
+                </button>
+
+                <button type="button" (click)="downloadFile(message)">
+                  Download
+                </button>
+              </div>
+            </div>
+          </ng-container>
+
           <span>{{ message.time }}</span>
         </div>
       </div>
     </section>
 
     <footer class="message-input" *ngIf="selectedChat && selectedChat.type === 'user'">
-      <button type="button">😊</button>
-      <button type="button">📎</button>
+      <div class="emoji-wrapper">
+        <button
+          type="button"
+          class="input-action-btn"
+          title="Emoji"
+          (click)="toggleEmojiPicker()"
+        >
+          😊
+        </button>
 
-      <textarea
-        rows="1"
-        placeholder="Type your message..."
-        [(ngModel)]="newMessage"
-        (keydown.enter)="onMessageEnter($event)"
-        [disabled]="sendingMessage"
-      ></textarea>
+        <div class="emoji-picker" *ngIf="showEmojiPicker">
+          <button
+            type="button"
+            *ngFor="let emoji of emojis"
+            (click)="addEmoji(emoji)"
+          >
+            {{ emoji }}
+          </button>
+        </div>
+      </div>
+
+      <button
+        type="button"
+        class="input-action-btn"
+        title="Attach file"
+        (click)="triggerFileInput(fileInput)"
+      >
+        📎
+      </button>
+
+      <input
+        #fileInput
+        type="file"
+        class="hidden-file-input"
+        (change)="onFileSelected($event)"
+      />
+
+      <div class="message-textarea-wrapper">
+        <div class="selected-file-chip" *ngIf="selectedFile">
+          <span>📎 {{ selectedFile.name }}</span>
+
+          <button
+            type="button"
+            title="Remove file"
+            (click)="clearSelectedFile()"
+          >
+            ×
+          </button>
+        </div>
+
+        <textarea
+          rows="1"
+          placeholder="Type your message..."
+          [(ngModel)]="newMessage"
+          (keydown.enter)="onMessageEnter($event)"
+          [disabled]="sendingMessage"
+        ></textarea>
+      </div>
 
       <button
         type="button"
         class="send-btn"
-        [disabled]="sendingMessage || !newMessage.trim()"
+        [disabled]="sendingMessage || (!newMessage.trim() && !selectedFile)"
         (click)="sendMessage()"
       >
         ➤

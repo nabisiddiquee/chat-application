@@ -16,9 +16,16 @@ export interface MessageResponse {
   receiverName?: string;
   receiverEmail?: string;
   content: string;
+  messageType?: 'TEXT' | 'FILE';
   sentAt?: string;
   createdAt?: string;
   read?: boolean;
+  readStatus?: boolean;
+
+  fileOriginalName?: string;
+  fileStoredName?: string;
+  fileContentType?: string;
+  fileSize?: number;
 }
 
 @Injectable({
@@ -35,6 +42,27 @@ export class MessageService {
 
   sendMessage(request: SendMessageRequest): Observable<MessageResponse> {
     return this.http.post<MessageResponse>(this.apiUrl, request);
+  }
+
+  sendFileMessage(receiverId: number, file: File, content: string): Observable<MessageResponse> {
+    const formData = new FormData();
+    formData.append('receiverId', String(receiverId));
+    formData.append('file', file);
+    formData.append('content', content || '');
+
+    return this.http.post<MessageResponse>(`${this.apiUrl}/file`, formData);
+  }
+
+  viewFile(fileName: string): Observable<Blob> {
+    return this.http.get(`${this.apiUrl}/files/view/${fileName}`, {
+      responseType: 'blob'
+    });
+  }
+
+  downloadFile(fileName: string): Observable<Blob> {
+    return this.http.get(`${this.apiUrl}/files/download/${fileName}`, {
+      responseType: 'blob'
+    });
   }
 
   markMessagesAsRead(senderId: number): Observable<string> {

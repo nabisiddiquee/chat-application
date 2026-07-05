@@ -24,5 +24,10 @@ public class MessageResponse {
     private MessageType messageType;
     private Boolean readStatus;
 
+    private String fileOriginalName;
+    private String fileStoredName;
+    private String fileContentType;
+    private Long fileSize;
+
     private LocalDateTime createdAt;
 }
