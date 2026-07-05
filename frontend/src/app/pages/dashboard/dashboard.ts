@@ -9,7 +9,12 @@ import { Auth } from '../../core/services/auth';
 import { ChatListItem, ChatService } from '../../core/services/chat';
 import { CurrentUser, UserService } from '../../core/services/user';
 import { MessageResponse, MessageService } from '../../core/services/message';
-import { UserStatusEvent, WebSocketService } from '../../core/services/websocket';
+import {
+  RealtimeChatEvent,
+  RealtimeMessageEvent,
+  UserStatusEvent,
+  WebSocketService
+} from '../../core/services/websocket';
 
 interface ChatPreview {
   id: number;
@@ -59,6 +64,8 @@ export class Dashboard implements OnInit, OnDestroy {
   messages: ChatMessage[] = [];
 
   private statusSubscription?: Subscription;
+  private messageSubscription?: Subscription;
+  private chatSubscription?: Subscription;
 
   private onlineStatusMap = new Map<number, boolean>();
   private lastSeenMap = new Map<number, string | null>();
@@ -99,12 +106,16 @@ export class Dashboard implements OnInit, OnDestroy {
 
   ngOnInit(): void {
     this.listenToStatusUpdates();
+    this.listenToRealtimeMessages();
+    this.listenToRealtimeChats();
     this.loadCurrentUser();
     this.loadChatList();
   }
 
   ngOnDestroy(): void {
     this.statusSubscription?.unsubscribe();
+    this.messageSubscription?.unsubscribe();
+    this.chatSubscription?.unsubscribe();
     this.webSocketService.disconnect();
   }
 
@@ -197,9 +208,126 @@ export class Dashboard implements OnInit, OnDestroy {
   private listenToStatusUpdates(): void {
     this.statusSubscription = this.webSocketService.statusUpdates$.subscribe({
       next: (event) => {
+        console.log('DASHBOARD STATUS EVENT:', event);
         this.applyStatusUpdate(event);
       }
     });
+  }
+
+  private listenToRealtimeMessages(): void {
+    this.messageSubscription = this.webSocketService.messageUpdates$.subscribe({
+      next: (event) => {
+        console.log('DASHBOARD MESSAGE EVENT:', event);
+        this.handleRealtimeMessage(event);
+      }
+    });
+  }
+
+  private listenToRealtimeChats(): void {
+    this.chatSubscription = this.webSocketService.chatUpdates$.subscribe({
+      next: (event) => {
+        console.log('DASHBOARD CHAT EVENT:', event);
+        this.handleRealtimeChat(event);
+      }
+    });
+  }
+
+  private handleRealtimeChat(event: RealtimeChatEvent): void {
+    const otherUserId = event.userId || event.id;
+
+    setTimeout(() => {
+      this.loadChatList();
+    }, 300);
+
+    if (
+      otherUserId &&
+      this.selectedChat?.type === 'user' &&
+      this.selectedChat.id === otherUserId
+    ) {
+      setTimeout(() => {
+        this.loadConversation(otherUserId);
+        this.markMessagesAsRead(otherUserId);
+      }, 400);
+    }
+  }
+
+  private handleRealtimeMessage(event: RealtimeMessageEvent): void {
+    const currentUserId = Number(this.currentUser?.id || this.auth.getUserId());
+
+    if (!currentUserId) {
+      return;
+    }
+
+    const otherUserId =
+      event.senderId === currentUserId
+        ? event.receiverId
+        : event.senderId;
+
+    const isSelectedChatOpen =
+      this.selectedChat?.type === 'user' &&
+      this.selectedChat.id === otherUserId;
+
+    const realtimeMessage = this.mapRealtimeMessage(event);
+
+    if (isSelectedChatOpen) {
+      const alreadyExists = this.messages.some((message) => message.id === realtimeMessage.id);
+
+      if (!alreadyExists) {
+        this.messages.push(realtimeMessage);
+        this.scrollMessagesToBottom();
+      }
+
+      if (event.senderId !== currentUserId) {
+        this.markMessagesAsRead(event.senderId);
+      }
+    }
+
+    this.updateChatPreviewAfterRealtime(event, otherUserId, isSelectedChatOpen);
+
+    setTimeout(() => {
+      this.loadChatList();
+    }, 300);
+
+    if (!this.chats.some((chat) => chat.id === otherUserId)) {
+      setTimeout(() => {
+        this.loadChatList();
+      }, 500);
+    }
+  }
+
+  private updateChatPreviewAfterRealtime(
+    event: RealtimeMessageEvent,
+    otherUserId: number,
+    isSelectedChatOpen: boolean
+  ): void {
+    const currentUserId = Number(this.currentUser?.id || this.auth.getUserId());
+    const sentByMe = event.senderId === currentUserId;
+
+    this.chats = this.chats.map((chat) => {
+      if (chat.id !== otherUserId) {
+        return chat;
+      }
+
+      return {
+        ...chat,
+        message: sentByMe ? `You: ${event.content}` : event.content,
+        time: this.formatMessageTime(event.sentAt || event.createdAt || ''),
+        unread: sentByMe || isSelectedChatOpen ? 0 : chat.unread + 1,
+        lastMessageId: event.id,
+        lastMessageSentByMe: sentByMe
+      };
+    });
+
+    if (this.selectedChat?.id === otherUserId && this.selectedChat.type === 'user') {
+      this.selectedChat = {
+        ...this.selectedChat,
+        message: sentByMe ? `You: ${event.content}` : event.content,
+        time: this.formatMessageTime(event.sentAt || event.createdAt || ''),
+        unread: 0,
+        lastMessageId: event.id,
+        lastMessageSentByMe: sentByMe
+      };
+    }
   }
 
   private applyStatusUpdate(event: UserStatusEvent): void {
@@ -343,7 +471,12 @@ export class Dashboard implements OnInit, OnDestroy {
         this.sendingMessage = false;
         this.newMessage = '';
 
-        this.messages.push(this.mapMessage(message));
+        const mappedMessage = this.mapMessage(message);
+        const alreadyExists = this.messages.some((item) => item.id === mappedMessage.id);
+
+        if (!alreadyExists) {
+          this.messages.push(mappedMessage);
+        }
 
         this.updateChatPreviewAfterSend(this.selectedChat!.id, content);
 
@@ -398,6 +531,25 @@ export class Dashboard implements OnInit, OnDestroy {
   }
 
   private mapMessage(message: MessageResponse): ChatMessage {
+    const currentUserId = Number(this.currentUser?.id || this.auth.getUserId());
+
+    const createdTime =
+      message.sentAt ||
+      message.createdAt ||
+      '';
+
+    return {
+      id: message.id,
+      senderId: message.senderId,
+      receiverId: message.receiverId,
+      content: message.content,
+      time: this.formatMessageTime(createdTime),
+      sentByMe: message.senderId === currentUserId,
+      read: message.read
+    };
+  }
+
+  private mapRealtimeMessage(message: RealtimeMessageEvent): ChatMessage {
     const currentUserId = Number(this.currentUser?.id || this.auth.getUserId());
 
     const createdTime =

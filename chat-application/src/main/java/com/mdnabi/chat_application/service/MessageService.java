@@ -13,6 +13,7 @@ import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
 import java.util.List;
+import java.util.Map;
 
 @Service
 @RequiredArgsConstructor
@@ -22,6 +23,7 @@ public class MessageService {
     private final UserRepository userRepository;
     private final SimpMessagingTemplate messagingTemplate;
 
+    @Transactional
     public MessageResponse sendMessage(String currentEmail, SendMessageRequest request) {
         User sender = userRepository.findByEmail(currentEmail)
                 .orElseThrow(() -> new RuntimeException("Sender not found"));
@@ -43,6 +45,9 @@ public class MessageService {
 
         Message savedMessage = messageRepository.save(message);
         MessageResponse response = mapToResponse(savedMessage);
+
+        publishRealtimeMessage(sender, receiver, response);
+
         return response;
     }
 
@@ -61,6 +66,52 @@ public class MessageService {
         int updatedCount = messageRepository.markMessagesAsRead(senderId, currentEmail);
         return updatedCount + " messages marked as read";
     }
+
+    private void publishRealtimeMessage(User sender, User receiver, MessageResponse response) {
+        messagingTemplate.convertAndSend(
+                "/topic/messages/" + sender.getId(),
+                response
+        );
+
+        messagingTemplate.convertAndSend(
+                "/topic/messages/" + receiver.getId(),
+                response
+        );
+
+        messagingTemplate.convertAndSend(
+                "/topic/chats/" + sender.getId(),
+                Map.of(
+                        "userId", receiver.getId(),
+                        "name", receiver.getName(),
+                        "email", receiver.getEmail(),
+                        "lastMessageId", response.getId(),
+                        "lastMessage", response.getContent(),
+                        "lastMessageTime", response.getCreatedAt(),
+                        "lastMessageSentByMe", true,
+                        "unreadCount", 0
+                )
+        );
+
+        messagingTemplate.convertAndSend(
+                "/topic/chats/" + receiver.getId(),
+                Map.of(
+                        "userId", sender.getId(),
+                        "name", sender.getName(),
+                        "email", sender.getEmail(),
+                        "lastMessageId", response.getId(),
+                        "lastMessage", response.getContent(),
+                        "lastMessageTime", response.getCreatedAt(),
+                        "lastMessageSentByMe", false,
+                        "unreadCount", 1
+                )
+        );
+
+        System.out.println("Realtime message published to /topic/messages/" + sender.getId());
+        System.out.println("Realtime message published to /topic/messages/" + receiver.getId());
+        System.out.println("Realtime chat published to /topic/chats/" + sender.getId());
+        System.out.println("Realtime chat published to /topic/chats/" + receiver.getId());
+    }
+
     private MessageResponse mapToResponse(Message message) {
         return MessageResponse.builder()
                 .id(message.getId())
