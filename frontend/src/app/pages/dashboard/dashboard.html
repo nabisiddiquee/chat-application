@@ -33,6 +33,7 @@
 
     <div class="search-box">
       <span>🔍</span>
+
       <input
         type="text"
         placeholder="Search chats or groups..."
@@ -74,6 +75,7 @@
       >
         <div class="chat-avatar">
           {{ chat.initials }}
+
           <span
             class="chat-status"
             [class.online]="chat.online"
@@ -99,6 +101,7 @@
 
       <div class="empty-list" *ngIf="!loadingChats && currentList.length === 0">
         <div>🔎</div>
+
         <p>
           {{ activeTab === 'chats' ? 'No chats found' : 'No groups found' }}
         </p>
@@ -111,6 +114,7 @@
       <div class="selected-profile">
         <div class="chat-avatar large">
           {{ selectedChat.initials }}
+
           <span
             class="chat-status"
             [class.online]="selectedChat.online"
@@ -223,6 +227,14 @@
           <span>{{ message.time }}</span>
         </div>
       </div>
+
+      <div class="typing-indicator live-typing" *ngIf="isTyping">
+        <span></span>
+        <span></span>
+        <span></span>
+
+        <strong>{{ typingUserName }} is typing...</strong>
+      </div>
     </section>
 
     <footer class="message-input" *ngIf="selectedChat && selectedChat.type === 'user'">
@@ -280,6 +292,7 @@
           rows="1"
           placeholder="Type your message..."
           [(ngModel)]="newMessage"
+          (input)="onTyping()"
           (keydown.enter)="onMessageEnter($event)"
           [disabled]="sendingMessage"
         ></textarea>

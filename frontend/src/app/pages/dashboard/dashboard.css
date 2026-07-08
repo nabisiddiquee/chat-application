@@ -1140,3 +1140,37 @@
 .file-actions button:hover {
   transform: translateY(-1px);
 }
+
+
+/* ================= LIVE TYPING INDICATOR ================= */
+
+.live-typing {
+  margin-top: 8px;
+  margin-bottom: 18px;
+}
+
+.live-typing strong {
+  margin-left: 8px;
+  font-size: 15px;
+  font-weight: 850;
+  color: #64748b;
+}
+
+/* ================= LIVE TYPING INDICATOR FIX ================= */
+
+.live-typing {
+  margin-top: 8px;
+  margin-bottom: 18px;
+}
+
+.live-typing strong {
+  margin-left: 8px;
+  font-size: 15px;
+  font-weight: 850;
+  color: #64748b;
+}
+
+.chat-window .live-typing {
+  position: relative;
+  z-index: 5;
+}

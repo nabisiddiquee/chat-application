@@ -46,6 +46,16 @@ export interface RealtimeChatEvent {
   unreadCount?: number;
 }
 
+export interface TypingEvent {
+  senderId?: number;
+  senderName?: string;
+  userId?: number;
+  id?: number;
+  name?: string;
+  receiverId?: number;
+  typing: boolean;
+}
+
 @Injectable({
   providedIn: 'root'
 })
@@ -55,14 +65,17 @@ export class WebSocketService {
 
   private messageSubscription: StompSubscription | null = null;
   private chatSubscription: StompSubscription | null = null;
+  private typingSubscription: StompSubscription | null = null;
 
   private readonly statusSubject = new Subject<UserStatusEvent>();
   private readonly messageSubject = new Subject<RealtimeMessageEvent>();
   private readonly chatSubject = new Subject<RealtimeChatEvent>();
+  private readonly typingSubject = new Subject<TypingEvent>();
 
   statusUpdates$ = this.statusSubject.asObservable();
   messageUpdates$ = this.messageSubject.asObservable();
   chatUpdates$ = this.chatSubject.asObservable();
+  typingUpdates$ = this.typingSubject.asObservable();
 
   async connect(userId: number): Promise<void> {
     if (this.stompClient?.active && this.connectedUserId === userId) {
@@ -106,6 +119,7 @@ export class WebSocketService {
 
       this.subscribeToMessages(userId);
       this.subscribeToChats(userId);
+      this.subscribeToTyping(userId);
     };
 
     this.stompClient.onDisconnect = () => {
@@ -122,6 +136,33 @@ export class WebSocketService {
 
     this.stompClient.activate();
   }
+
+  sendTyping(receiverId: number, typing: boolean): void {
+  if (!this.stompClient?.connected) {
+    console.warn('Typing event skipped because WebSocket is not connected');
+    return;
+  }
+
+  if (!this.connectedUserId) {
+    console.warn('Typing event skipped because connected user id is missing');
+    return;
+  }
+
+  this.stompClient.publish({
+    destination: '/app/typing',
+    body: JSON.stringify({
+      senderId: this.connectedUserId,
+      receiverId,
+      typing
+    })
+  });
+
+  console.log('TYPING SENT:', {
+    senderId: this.connectedUserId,
+    receiverId,
+    typing
+  });
+}
 
   private subscribeToMessages(userId: number): void {
     if (!this.stompClient?.connected) {
@@ -157,12 +198,31 @@ export class WebSocketService {
     console.log('Subscribed to chats topic:', `/topic/chats/${userId}`);
   }
 
+  private subscribeToTyping(userId: number): void {
+    if (!this.stompClient?.connected) {
+      return;
+    }
+
+    this.typingSubscription?.unsubscribe();
+
+    this.typingSubscription = this.stompClient.subscribe(
+      `/topic/typing/${userId}`,
+      (message: IMessage) => {
+        this.handleTypingMessage(message);
+      }
+    );
+
+    console.log('Subscribed to typing topic:', `/topic/typing/${userId}`);
+  }
+
   disconnect(): void {
     this.messageSubscription?.unsubscribe();
     this.chatSubscription?.unsubscribe();
+    this.typingSubscription?.unsubscribe();
 
     this.messageSubscription = null;
     this.chatSubscription = null;
+    this.typingSubscription = null;
 
     if (this.stompClient) {
       this.stompClient.deactivate();
@@ -198,6 +258,16 @@ export class WebSocketService {
       this.chatSubject.next(data);
     } catch (error) {
       console.error('Invalid realtime chat event:', error);
+    }
+  }
+
+  private handleTypingMessage(message: IMessage): void {
+    try {
+      const data = JSON.parse(message.body) as TypingEvent;
+      console.log('TYPING EVENT:', data);
+      this.typingSubject.next(data);
+    } catch (error) {
+      console.error('Invalid typing event:', error);
     }
   }
 }

@@ -12,6 +12,7 @@ import { MessageResponse, MessageService } from '../../core/services/message';
 import {
   RealtimeChatEvent,
   RealtimeMessageEvent,
+  TypingEvent,
   UserStatusEvent,
   WebSocketService
 } from '../../core/services/websocket';
@@ -64,12 +65,16 @@ export class Dashboard implements OnInit, OnDestroy {
   loadingChats = false;
   loadingMessages = false;
   sendingMessage = false;
+  private typingActive = false;
 
   newMessage = '';
   messages: ChatMessage[] = [];
 
   showEmojiPicker = false;
   selectedFile: File | null = null;
+
+  isTyping = false;
+  typingUserName = '';
 
   emojis: string[] = [
     '😀', '😁', '😂', '🤣', '😊', '😍', '😘', '😎',
@@ -81,6 +86,10 @@ export class Dashboard implements OnInit, OnDestroy {
   private statusSubscription?: Subscription;
   private messageSubscription?: Subscription;
   private chatSubscription?: Subscription;
+  private typingSubscription?: Subscription;
+
+  private typingStopTimer?: ReturnType<typeof setTimeout>;
+  private receiverTypingClearTimer?: ReturnType<typeof setTimeout>;
 
   private onlineStatusMap = new Map<number, boolean>();
   private lastSeenMap = new Map<number, string | null>();
@@ -123,6 +132,7 @@ export class Dashboard implements OnInit, OnDestroy {
     this.listenToStatusUpdates();
     this.listenToRealtimeMessages();
     this.listenToRealtimeChats();
+    this.listenToTypingUpdates();
     this.loadCurrentUser();
     this.loadChatList();
   }
@@ -131,6 +141,16 @@ export class Dashboard implements OnInit, OnDestroy {
     this.statusSubscription?.unsubscribe();
     this.messageSubscription?.unsubscribe();
     this.chatSubscription?.unsubscribe();
+    this.typingSubscription?.unsubscribe();
+
+    if (this.typingStopTimer) {
+      clearTimeout(this.typingStopTimer);
+    }
+
+    if (this.receiverTypingClearTimer) {
+      clearTimeout(this.receiverTypingClearTimer);
+    }
+
     this.webSocketService.disconnect();
   }
 
@@ -246,6 +266,87 @@ export class Dashboard implements OnInit, OnDestroy {
       }
     });
   }
+
+  private listenToTypingUpdates(): void {
+    this.typingSubscription = this.webSocketService.typingUpdates$.subscribe({
+      next: (event) => {
+        console.log('DASHBOARD TYPING EVENT:', event);
+        this.handleTypingEvent(event);
+      }
+    });
+  }
+
+  private handleTypingEvent(event: TypingEvent): void {
+  if (!this.selectedChat || this.selectedChat.type !== 'user') {
+    return;
+  }
+
+  const senderId =
+    (event as any).senderId ||
+    (event as any).userId ||
+    (event as any).id;
+
+  const senderName =
+    (event as any).senderName ||
+    (event as any).name ||
+    this.selectedChat.name;
+
+  const typing = Boolean((event as any).typing);
+
+  console.log('TYPING MATCH CHECK:', {
+    selectedChatId: this.selectedChat.id,
+    senderId,
+    senderName,
+    typing,
+    rawEvent: event
+  });
+
+  if (Number(this.selectedChat.id) !== Number(senderId)) {
+    return;
+  }
+
+  this.isTyping = typing;
+  this.typingUserName = senderName;
+
+  if (this.receiverTypingClearTimer) {
+    clearTimeout(this.receiverTypingClearTimer);
+  }
+
+  if (typing) {
+    this.scrollMessagesToBottom();
+
+    this.receiverTypingClearTimer = setTimeout(() => {
+      this.isTyping = false;
+      this.typingUserName = '';
+    }, 2500);
+  } else {
+    this.isTyping = false;
+    this.typingUserName = '';
+  }
+}
+
+  onTyping(): void {
+  if (!this.selectedChat || this.selectedChat.type !== 'user') {
+    return;
+  }
+
+  if (!this.typingActive) {
+    this.typingActive = true;
+    this.webSocketService.sendTyping(this.selectedChat.id, true);
+  }
+
+  if (this.typingStopTimer) {
+    clearTimeout(this.typingStopTimer);
+  }
+
+  this.typingStopTimer = setTimeout(() => {
+    if (this.selectedChat && this.selectedChat.type === 'user') {
+      this.webSocketService.sendTyping(this.selectedChat.id, false);
+    }
+
+    this.typingActive = false;
+  }, 1600);
+}
 
   private handleRealtimeChat(event: RealtimeChatEvent): void {
     const otherUserId = event.userId || event.id;
@@ -442,6 +543,16 @@ export class Dashboard implements OnInit, OnDestroy {
     this.newMessage = '';
     this.selectedFile = null;
     this.showEmojiPicker = false;
+    this.isTyping = false;
+    this.typingUserName = '';
+
+    if (this.typingStopTimer) {
+      clearTimeout(this.typingStopTimer);
+    }
+
+    if (this.receiverTypingClearTimer) {
+      clearTimeout(this.receiverTypingClearTimer);
+    }
 
     if (chat.type === 'user') {
       this.loadConversation(chat.id);
@@ -488,12 +599,16 @@ export class Dashboard implements OnInit, OnDestroy {
     const request$ = this.selectedFile
       ? this.messageService.sendFileMessage(this.selectedChat.id, this.selectedFile, content)
       : this.messageService.sendMessage({
-          receiverId: this.selectedChat.id,
-          content
-        });
+        receiverId: this.selectedChat.id,
+        content
+      });
 
     request$.subscribe({
       next: (message) => {
+        if (this.selectedChat?.type === 'user') {
+          this.webSocketService.sendTyping(this.selectedChat.id, false);
+        }
+
         this.sendingMessage = false;
         this.newMessage = '';
         this.selectedFile = null;
@@ -823,6 +938,16 @@ export class Dashboard implements OnInit, OnDestroy {
     this.newMessage = '';
     this.selectedFile = null;
     this.showEmojiPicker = false;
+    this.isTyping = false;
+    this.typingUserName = '';
+
+    if (this.typingStopTimer) {
+      clearTimeout(this.typingStopTimer);
+    }
+
+    if (this.receiverTypingClearTimer) {
+      clearTimeout(this.receiverTypingClearTimer);
+    }
 
     if (tab === 'chats') {
       this.loadChatList();
