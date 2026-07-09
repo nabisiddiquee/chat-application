@@ -33,6 +33,7 @@ public class MessageService {
     private final MessageRepository messageRepository;
     private final UserRepository userRepository;
     private final SimpMessagingTemplate messagingTemplate;
+    private final MessageEncryptionUtil messageEncryptionUtil;
 
     @Value("${app.upload.dir:uploads/chat-files}")
     private String uploadDir;
@@ -49,10 +50,12 @@ public class MessageService {
             throw new RuntimeException("You cannot send message to yourself");
         }
 
+        String encryptedContent = messageEncryptionUtil.encrypt(request.getContent());
+
         Message message = Message.builder()
                 .sender(sender)
                 .receiver(receiver)
-                .content(request.getContent())
+                .content(encryptedContent)
                 .messageType(MessageType.TEXT)
                 .readStatus(false)
                 .build();
@@ -102,10 +105,12 @@ public class MessageService {
                     ? content.trim()
                     : originalFileName;
 
+            String encryptedContent = messageEncryptionUtil.encrypt(finalContent);
+
             Message message = Message.builder()
                     .sender(sender)
                     .receiver(receiver)
-                    .content(finalContent)
+                    .content(encryptedContent)
                     .messageType(MessageType.FILE)
                     .readStatus(false)
                     .fileOriginalName(originalFileName)
@@ -190,11 +195,6 @@ public class MessageService {
                 "/topic/chats/" + receiver.getId(),
                 buildChatPayload(sender, response, false, 1)
         );
-
-        System.out.println("Realtime message published to /topic/messages/" + sender.getId());
-        System.out.println("Realtime message published to /topic/messages/" + receiver.getId());
-        System.out.println("Realtime chat published to /topic/chats/" + sender.getId());
-        System.out.println("Realtime chat published to /topic/chats/" + receiver.getId());
     }
 
     private Map<String, Object> buildChatPayload(User user, MessageResponse response, boolean sentByMe, int unreadCount) {
@@ -213,13 +213,15 @@ public class MessageService {
     }
 
     private MessageResponse mapToResponse(Message message) {
+        String decryptedContent = messageEncryptionUtil.decrypt(message.getContent());
+
         return MessageResponse.builder()
                 .id(message.getId())
                 .senderId(message.getSender().getId())
                 .senderName(message.getSender().getName())
                 .receiverId(message.getReceiver().getId())
                 .receiverName(message.getReceiver().getName())
-                .content(message.getContent())
+                .content(decryptedContent)
                 .messageType(message.getMessageType())
                 .readStatus(message.getReadStatus())
                 .fileOriginalName(message.getFileOriginalName())
