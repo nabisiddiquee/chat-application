@@ -1,6 +1,7 @@
 package com.mdnabi.chat_application.config;
 
 import lombok.RequiredArgsConstructor;
+import org.springframework.beans.factory.annotation.Value;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
 import org.springframework.http.HttpMethod;
@@ -20,6 +21,7 @@ import org.springframework.web.cors.CorsConfiguration;
 import org.springframework.web.cors.CorsConfigurationSource;
 import org.springframework.web.cors.UrlBasedCorsConfigurationSource;
 
+import java.util.ArrayList;
 import java.util.List;
 
 @Configuration
@@ -29,6 +31,12 @@ public class SecurityConfig {
 
     private final JwtAuthenticationFilter jwtAuthenticationFilter;
     private final UserDetailsService userDetailsService;
+
+    @Value("${app.frontend.local-url:http://localhost:4200}")
+    private String localFrontendUrl;
+
+    @Value("${app.frontend.production-url:http://localhost:4200}")
+    private String productionFrontendUrl;
 
     @Bean
     public SecurityFilterChain securityFilterChain(HttpSecurity http) throws Exception {
@@ -61,10 +69,15 @@ public class SecurityConfig {
     public CorsConfigurationSource corsConfigurationSource() {
         CorsConfiguration configuration = new CorsConfiguration();
 
-        configuration.setAllowedOrigins(List.of(
-                "http://localhost:4200",
-                "http://127.0.0.1:4200"
-        ));
+        List<String> allowedOrigins = new ArrayList<>();
+        allowedOrigins.add(localFrontendUrl);
+        allowedOrigins.add("http://127.0.0.1:4200");
+
+        if (productionFrontendUrl != null && !productionFrontendUrl.isBlank()) {
+            allowedOrigins.add(productionFrontendUrl);
+        }
+
+        configuration.setAllowedOrigins(allowedOrigins);
 
         configuration.setAllowedMethods(List.of(
                 "GET",

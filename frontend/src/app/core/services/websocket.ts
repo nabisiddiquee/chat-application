@@ -1,6 +1,7 @@
 import { Injectable } from '@angular/core';
 import { Subject } from 'rxjs';
 import { Client, IMessage, StompSubscription } from '@stomp/stompjs';
+import { environment } from '../../../environments/environment';
 
 export interface UserStatusEvent {
   userId?: number;
@@ -95,7 +96,7 @@ export class WebSocketService {
     const SockJS = sockJsModule.default || sockJsModule;
 
     this.stompClient = new Client({
-      webSocketFactory: () => new SockJS('http://localhost:8082/ws-sockjs'),
+     webSocketFactory: () => new SockJS(environment.websocketUrl),
 
       connectHeaders: {
         userId: String(userId)

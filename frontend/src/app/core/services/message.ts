@@ -1,6 +1,7 @@
 import { Injectable } from '@angular/core';
 import { HttpClient } from '@angular/common/http';
 import { Observable } from 'rxjs';
+import { environment } from '../../../environments/environment';
 
 export interface SendMessageRequest {
   receiverId: number;
@@ -32,9 +33,9 @@ export interface MessageResponse {
   providedIn: 'root'
 })
 export class MessageService {
-  private readonly apiUrl = 'http://localhost:8082/api/messages';
+  private readonly apiUrl = `${environment.apiBaseUrl}/messages`;
 
-  constructor(private http: HttpClient) {}
+  constructor(private http: HttpClient) { }
 
   getConversation(receiverId: number): Observable<MessageResponse[]> {
     return this.http.get<MessageResponse[]>(`${this.apiUrl}/${receiverId}`);
